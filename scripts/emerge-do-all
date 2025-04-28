@@ -1,0 +1,46 @@
+#!/bin/bash
+
+# /usr/bin/emerge-do-all
+# Runs a full upgrade of the system incl. maintenance tasks.
+# Invokes
+#
+#  1. emerge-sync
+#  2. emerge-update @world
+#  3. emerge-depclean
+#  4. eclean-pkg
+#  5. emerge-rebuild
+#
+# in that order.
+
+##
+## Logging helpers
+##
+
+info() {
+	echo -e " ${NOCOLOR-\e[1;32m*\e[0m }${*}" >&2
+}
+
+warning() {
+	echo -e " ${NOCOLOR-\e[1;33m*\e[0m }${*}" >&2
+}
+
+error() {
+	echo -e " ${NOCOLOR-\e[1;31m*\e[0m }${*}" >&2
+}
+
+die() {
+	error ${*}
+	exit 1
+}
+
+sudo emerge-sync || die "emerge-sync failed"
+
+sudo emerge-update @world || die "emerge-update failed"
+
+sudo emerge-depclean || die "emerge-depclean failed"
+
+sudo eclean-pkg || die "eclean-pkg failed"
+
+sudo emerge-rebuild || die "emerge-rebuild failed"
+
+info "All steps completed successfully :D"

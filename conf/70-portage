@@ -1,0 +1,9 @@
+# /etc/sudoers.d/70-portage
+# Allow members of group portage to run "emerge-*" commands as
+# user and group root without password
+%portage ALL=(root:root) NOPASSWD: /usr/bin/eclean-pkg
+%portage ALL=(root:root) NOPASSWD: /usr/sbin/emerge-depclean
+%portage ALL=(root:root) NOPASSWD: /usr/sbin/emerge-install
+%portage ALL=(root:root) NOPASSWD: /usr/sbin/emerge-rebuild
+%portage ALL=(root:root) NOPASSWD: /usr/sbin/emerge-sync
+%portage ALL=(root:root) NOPASSWD: /usr/sbin/emerge-update

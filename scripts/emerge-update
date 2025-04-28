@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# /usr/sbin/emerge-update <optional package names, @world or @system>
+# Wrapper for "emerge --update" wih additional safe guards as default parameters.
+
+emerge --ask --verbose --deep --keep-going --jobs 3 --newuse --oneshot --update "$@" || exit 1

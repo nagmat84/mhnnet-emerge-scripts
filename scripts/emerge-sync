@@ -1,0 +1,78 @@
+#!/bin/bash
+
+# /usr/sbin/emerge-sync
+# Synchronizes Portage configuration with build server and updates package repositories.
+# The location of the upstream (build server) configuration is read from /etc/mhnnet-client.conf.
+# The script for synchronizes
+#
+#  - /etc/portage
+#  - /var/lib/portage_world
+#  - /var/lib/portage_sets
+#
+# with the build server to keep the configuration consistent.
+# Then the script updates the package repositories (via emerge --sync) as usual.
+
+source /etc/mhnnet-client.conf
+RSYNC_OPTIONS="--whole-file --archive --human-readable --progress --one-file-system --prune-empty-dirs --quiet --delete"
+SERVER_PATH_PREFIX="${SYNC_USER}@${SYNC_SERVER}:/srv/gentoo-build/${SYNC_BUILD_NAME}"
+
+##
+## Logging helpers
+##
+
+info() {
+	echo -e " ${NOCOLOR-\e[1;32m*\e[0m }${*}" >&2
+}
+
+warning() {
+	echo -e " ${NOCOLOR-\e[1;33m*\e[0m }${*}" >&2
+}
+
+error() {
+	echo -e " ${NOCOLOR-\e[1;31m*\e[0m }${*}" >&2
+}
+
+die() {
+	error ${*}
+	exit 1
+}
+
+##
+## Functions for each main steps of the script
+## (roughly ordered as they are called in a typical program flow)
+##
+
+check_config() {
+	[[ -v SYNC_USER && -v SYNC_SERVER && -v SYNC_BUILD_NAME ]] || die "Opions SYNC_USER, SYNC_SERVER or SYNC_BUILD_NAME not set."
+}
+
+sync_portage_config() {
+	info "Syncing portage configuration ..."
+# For reasons which I have not fully understood, it is not possible to put the
+# filter rules into a bash variable, because bash performs some strange variable
+# expansion
+	rsync --filter '- make.conf' \
+	      --filter '- *~' \
+	      --filter '- binrepos.conf/' \
+	      --filter '- repos.conf/' \
+	      --filter '- gnupg/' \
+	      ${RSYNC_OPTIONS} ${SERVER_PATH_PREFIX}/etc/portage/               /etc/portage/     || die "Could not sync /etc/portage"
+	rsync ${RSYNC_OPTIONS} ${SERVER_PATH_PREFIX}/var/lib/portage/world      /var/lib/portage/ || die "Could not sync /var/lib/portage/world"
+	rsync ${RSYNC_OPTIONS} ${SERVER_PATH_PREFIX}/var/lib/portage/world_sets /var/lib/portage/ || die "Could not sync /var/lib/portage/world_sets"
+}
+
+sync_package_repositories() {
+	info "Syncing package repositories ..."
+	emerge --sync || die "Could not sync package repositories"
+}
+
+## Main function
+
+main() {
+	[[ -n ${NOCOLOR+yes} ]] && NOCOLOR=
+	check_config
+	sync_portage_config
+	sync_package_repositories
+}
+
+main

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# /usr/sbin/emerge-rebuild
+# Wrapper for "emerge @preserved-rebuild" wih additional safe guards as default parameters.
+
+emerge --ask --verbose --deep --keep-going --jobs 3 --oneshot "@preserved-rebuild" || exit 1

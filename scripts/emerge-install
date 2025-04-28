@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# /usr/sbin/emerge-install <package names>
+# Wrapper for "emerge" wih additional safe guards as default parameters.
+
+emerge --ask --verbose --deep --keep-going --jobs 3 "$@" || exit 1
