@@ -1,6 +1,113 @@
 #!/bin/bash
 
 # /usr/sbin/emerge-rebuild
-# Wrapper for "emerge @preserved-rebuild" wih additional safe guards as default parameters.
+# Operations depends on setup configuration:
+#
+#  1. _Standalone:_ For standalone installations `emerge-rebuild` is a wrapper
+#     around `emerge @preserved-rebuild`  with additional safe guards as
+#     default parameters.
+#  2. _Build server:_ For a build server this script is much more thorough.
+#     The script also rebuilds installed packages with missing binaries.
+#     The objective is to re-create any binary which a build client might
+#     attempt to fetch.
+#  3. _Build client:_ Same as for standalone setups.
 
-emerge --ask --verbose --deep --keep-going --jobs 3 --oneshot "@preserved-rebuild" || exit 1
+source /etc/mhnnet-emerge.conf
+
+DATE=$(date -u '+%Y-%m-%d_%H-%M-%S_%N')
+AVAIL_BIN_FILE="/dev/shm/${DATE}-available-binaries.txt"
+INSTALLED_PKG_FILE="/dev/shm/${DATE}-installed-packages.txt"
+REEMERGE_EBUILDS_FILE="/dev/shm/${DATE}-reemerge-packages.txt"
+EMERGE_OPTS='--ask --verbose --deep --oneshot --keep-going --jobs 3'
+
+##
+## Logging helpers
+##
+
+info() {
+	echo -e " ${NOCOLOR-\e[1;32m*\e[0m }${*}" >&2
+}
+
+warning() {
+	echo -e " ${NOCOLOR-\e[1;33m*\e[0m }${*}" >&2
+}
+
+error() {
+	echo -e " ${NOCOLOR-\e[1;31m*\e[0m }${*}" >&2
+}
+
+die() {
+	error ${*}
+	exit 1
+}
+
+##
+## Functions for each main steps of the script
+## (roughly ordered as they are called in a typical program flow)
+##
+
+check_config() {
+	case "${SETUP_TYPE}" in
+		"standalone"|"build-server"|"build-client")
+			;;
+		*)
+			die "Unknown setup type";;
+	esac
+}
+
+rebuild_preserved_packages_only() {
+	info "Emerging packages which preserve libraries ..."
+	emerge ${EMERGE_OPTS} "@preserved-rebuild"
+	return $?
+}
+
+find_missing_binpkgs() {
+	info "Compiling list of missing binary packages ..."
+	find /var/cache/binpkgs/ -type f -name '*.gpkg.tar' | \
+		sed -e 's/^\/var\/cache\/binpkgs\/\([-_+a-zA-Z0-9]\+\)\/\([-_+a-zA-Z0-9]\+\)\/\(-\?[a-zA-Z][_+a-zA-Z0-9]*\)*-\([0-9][-._0-9a-z]*\)-[0-9]\+\.gpkg\.tar$/\1\/\2-\4/' | \
+		sort > \
+		${AVAIL_BIN_FILE}
+
+	equery list -F '$cpv' -f '.*' | \
+		sort | \
+		egrep -v '((^acct-)|(^sys-firmware/)|(^sys-kernel/.*firmware.*$)|(^sys-kernel/.*-sources-[0-9][-._0-9a-z]*$)|(^net-wireless/wireless-regdb)|(^virtual/)|(-bin-[0-9][-._0-9a-z]*$)|(-meta-[0-9][-._0-9a-z]*$))' > \
+		${INSTALLED_PKG_FILE}
+
+	comm -1 -3 ${AVAIL_BIN_FILE} ${INSTALLED_PKG_FILE} | \
+		sed -e 's/^/=/' > \
+		${REEMERGE_EBUILDS_FILE}
+	rm -f ${AVAIL_BIN_FILE} ${INSTALLED_PKG_FILE}
+}
+
+rebuild_missing_and_preserved_packages() {
+	info "Emerging missing binary packages and packages which preserve libraries ..."
+	emerge ${EMERGE_OPTS} $(<${REEMERGE_EBUILDS_FILE}) "@preserved-rebuild"
+	return $?
+}
+
+clean_up() {
+	rm -f ${REEMERGE_EBUILDS_FILE}
+}
+
+## Main function
+
+main() {
+	[[ -n ${NOCOLOR+yes} ]] && NOCOLOR=
+	check_config
+	case "${SETUP_TYPE}" in
+		"standalone"|"build-client")
+			rebuild_preserved_packages_only
+			return $?;;
+		"build-server")
+			find_missing_binpkgs
+			rebuild_missing_and_preserved_packages
+			exit_code=$?
+			clean_up
+			return $exit_code;;
+		*)
+			die "Unknown setup type";;
+	esac
+}
+
+main
+exit $?

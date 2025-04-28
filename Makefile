@@ -2,7 +2,7 @@
 
 BIN_SCRIPT = emerge-do-all
 SBIN_SCRIPTS = emerge-depclean emerge-install emerge-rebuild emerge-sync emerge-update
-CONF_FILE = mhnnet-client.conf
+CONF_FILE = mhnnet-emerge.conf
 SUDO_DROP_IN = 70-portage
 
 all :
@@ -28,11 +28,11 @@ uninstall :
 	-mv -f -b $(DESTDIR)/etc/$(CONF_FILE) $(DESTDIR)/etc/$(CONF_FILE).old
 
 clean :
-	@echo "Nothing to do."
-	@echo "The scripts do not need to be cleaned up; this target only exists for compatability."
+	rm -f mhnnet-emerge-scripts-v*.tar.gz
 
 dist :
 	set -e;\
 	VERSION=$$(git tag --points-at HEAD --list 'v*');\
 	[ -z $${VERSION} ] && echo "Error: GIT HEAD does not have a version tag" && exit 127;\
-	tar -czvf mhnnet-client-scripts-$${VERSION}.tar.gz --group=root:0 --owner=root:0 --exclude='*.tar*' --exclude='*.git*' ./;\
+	tar -czvf /tmp/mhnnet-emerge-scripts-$${VERSION}.tar.gz --group=root:0 --owner=root:0 --exclude='*.tar*' --exclude='*.git*' ./;\
+	mv /tmp/mhnnet-emerge-scripts-$${VERSION}.tar.gz .;

@@ -1,18 +1,30 @@
 #!/bin/bash
 
 # /usr/sbin/emerge-sync
-# Synchronizes Portage configuration with build server and updates package repositories.
-# The location of the upstream (build server) configuration is read from /etc/mhnnet-client.conf.
-# The script for synchronizes
+# Operations depends on setup configuration:
 #
-#  - /etc/portage
-#  - /var/lib/portage_world
-#  - /var/lib/portage_sets
-#
-# with the build server to keep the configuration consistent.
-# Then the script updates the package repositories (via emerge --sync) as usual.
+#  1. _Standalone:_ For standalone installations `emerge-sync` is a wrapper
+#     around `emerge --sync` with some extra flags similar to the other
+#     `emerge-*` scripts.
+#  2. _Build server:_ For build servers the script is a no-op.
+#     A build server is running in a chroot environment, uses the same
+#     repositories as the host and assumes that the host syncs the
+#     repositories.
+#  3. _Build client:_ For build clients the script synchronizes the Portage
+#     configuration with the build server and updates package repositories.
+#     The location of the upstream (build server) configuration is read
+#     from `/etc/mhnnet-emerge.conf`.
+#     The script for synchronizes
+#     
+#      - `/etc/portage`
+#      - `/var/lib/portage_world`
+#      - `/var/lib/portage_sets`
+#     
+#     with the build server to keep the configuration consistent.
+#     Then the script updates the package repositories (via `emerge --sync`)
+#     as usual.
 
-source /etc/mhnnet-client.conf
+source /etc/mhnnet-emerge.conf
 RSYNC_OPTIONS="--whole-file --archive --human-readable --progress --one-file-system --prune-empty-dirs --quiet --delete"
 SERVER_PATH_PREFIX="${SYNC_USER}@${SYNC_SERVER}:/srv/gentoo-build/${SYNC_BUILD_NAME}"
 
@@ -43,7 +55,14 @@ die() {
 ##
 
 check_config() {
-	[[ -v SYNC_USER && -v SYNC_SERVER && -v SYNC_BUILD_NAME ]] || die "Opions SYNC_USER, SYNC_SERVER or SYNC_BUILD_NAME not set."
+	case "${SETUP_TYPE}" in
+		"standalone"|"build-server")
+			;;
+		"build-client")
+			[[ -v SYNC_USER && -v SYNC_SERVER && -v SYNC_BUILD_NAME ]] || die "Mandatory options SYNC_USER, SYNC_SERVER or SYNC_BUILD_NAME not set for setup type \"build-client\".";;
+		*)
+			die "Unknown setup type";;
+	esac
 }
 
 sync_portage_config() {
@@ -71,8 +90,18 @@ sync_package_repositories() {
 main() {
 	[[ -n ${NOCOLOR+yes} ]] && NOCOLOR=
 	check_config
-	sync_portage_config
-	sync_package_repositories
+	case "${SETUP_TYPE}" in
+		"standalone")
+			sync_package_repositories;;
+		"build-server")
+			;;
+		"build-client")
+			sync_portage_config
+			sync_package_repositories
+			;;
+		*)
+			die "Unknown setup type";;
+	esac
 }
 
 main
